@@ -2,7 +2,7 @@
 <html>
 
 <head>
-    <title>Example of the Authorization Code flow with Spotify</title>
+    <title>Makey Spotify</title>
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/css/bootstrap.min.css" integrity="sha384-Vkoo8x4CGsO3+Hhxv8T/Q5PaXtkKtu6ug5TOeNV6gBiFeWPGFN9MuhOf23Q9Ifjh" crossorigin="anonymous">
     <style type="text/css">
         #login,
@@ -411,12 +411,14 @@
 
             function setupButtons(player) {
                 listener.simple_combo('space', () => {
+                    console.info("Hit play/pause")
                     if (player.is_ready) {
                         player.togglePlay();
                     }
                 });
 
                 listener.simple_combo('n', () => {
+                    console.info("Hit next")
                     if (player.is_ready) {
                         setRepeat();
                         player.nextTrack();
@@ -424,6 +426,7 @@
                 });
 
                 listener.simple_combo('p', () => {
+                    console.info("Hit previous")
                     if (player.is_ready) {
                         setRepeat();
                         player.previousTrack();

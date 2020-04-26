@@ -1,0 +1,440 @@
+<!doctype html>
+<html>
+
+<head>
+    <title>Example of the Authorization Code flow with Spotify</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/css/bootstrap.min.css" integrity="sha384-Vkoo8x4CGsO3+Hhxv8T/Q5PaXtkKtu6ug5TOeNV6gBiFeWPGFN9MuhOf23Q9Ifjh" crossorigin="anonymous">
+    <style type="text/css">
+        #login,
+        #loggedin {
+            display: none;
+        }
+
+        .text-overflow {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            width: 500px;
+        }
+    </style>
+    <script src="https://cdn.rawgit.com/dmauro/Keypress/master/keypress.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/spotify-web-api-js@1.2.0/src/spotify-web-api.min.js"></script>
+</head>
+
+<body>
+    <div class="container">
+        <div id="login">
+            <h1>This is an example of the Authorization Code flow</h1>
+            <a href="/login" class="btn btn-primary">Log in with Spotify</a>
+        </div>
+        <div id="loggedin">
+            <button type="button" class="btn btn-secondary" id="obtain-new-token">Relogin</button>
+            <div id="current-track">
+            </div>
+            <div id="tracks">
+            </div>
+            <div id="user-profile">
+            </div>
+            <div id="oauth">
+            </div>
+        </div>
+    </div>
+
+    <script id="user-profile-template" type="text/x-handlebars-template">
+      <!-- <h1>Logged in as {{display_name}}</h1>
+      <div class="media">
+        <div class="pull-left">
+          <img class="media-object" width="150" src="{{images.0.url}}" />
+        </div>
+        <div class="media-body">
+          <dl class="dl-horizontal">
+            <dt>Display name</dt><dd class="clearfix">{{display_name}}</dd>
+            <dt>Id</dt><dd>{{id}}</dd>
+            <dt>Email</dt><dd>{{email}}</dd>
+            <dt>Spotify URI</dt><dd><a href="{{external_urls.spotify}}">{{external_urls.spotify}}</a></dd>
+            <dt>Link</dt><dd><a href="{{href}}">{{href}}</a></dd>
+            <dt>Profile Image</dt><dd class="clearfix"><a href="{{images.0.url}}">{{images.0.url}}</a></dd>
+            <dt>Country</dt><dd>{{country}}</dd>
+          </dl>
+        </div>
+      </div> -->
+    </script>
+
+    <script id="current-track-template" type="text/x-handlebars-template">
+       <h1>Current Song</h1>
+       <div class="row">
+            <div class="col-3">
+                <div class="row">
+                    <div class="col-10">
+                        <img src="{{image.url}}" alt="art" class="img-thumbnail" width="{{image.width}}" height="{{image.height}}">
+                    </div>
+                    <div class="col align-self-center">
+                        <p>{{track.name}}</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </script>
+
+    <script id="tracks-template" type="text/x-handlebars-template">
+        <h1>Makey Spotify Tracks</h1>
+        
+        <div class="row">
+        {{#each tracks}}
+                <div class="col-3">
+                    <div class="row">
+                        <div class="col-10">
+                            <img src="{{this.image.url}}" alt="art" class="img-thumbnail" width="{{this.image.width}}" height="{{this.image.height}}">
+                        </div>
+                        <div class="col align-self-center">
+                            <p>{{this.track.name}}</p>
+                        </div>
+                    </div>
+                </div>
+        {{else}}
+            <div class="col">
+                <p>You need to add tracks to your playlist and refresh this page</p>
+            </div>
+        {{/each}}
+        </div>
+    </script>
+
+    <script id="oauth-template" type="text/x-handlebars-template">
+      <!-- <h2>oAuth info</h2>
+      <dl class="dl-horizontal">
+        <dt>Access token</dt><dd class="text-overflow">{{access_token}}</dd>
+        <dt>Refresh token</dt><dd class="text-overflow">{{refresh_token}}</dd>
+      </dl> -->
+    </script>
+
+    <script src="//cdnjs.cloudflare.com/ajax/libs/handlebars.js/2.0.0-alpha.1/handlebars.min.js"></script>
+    <script src="http://code.jquery.com/jquery-1.10.1.min.js"></script>
+    <script src="https://sdk.scdn.co/spotify-player.js"></script>
+    <script>
+        (function () {
+            var listener = new window.keypress.Listener();
+            /**
+             * 
+             * Setup playlist
+             */
+            const myLocalStorage = window.localStorage;
+
+            /**
+             * Songs for playing
+            */
+            const supportedKeys = [
+                'left',
+                'right',
+                'up',
+                'down',
+            ]
+            let playlistTracks = [];
+            var userConst = new SpotifyWebApi();
+
+            /**
+             * Obtains parameters from the hash of the URL
+             * @return Object
+             */
+            function getHashParams() {
+                var hashParams = {};
+                var e, r = /([^&;=]+)=?([^&;]*)/g,
+                    q = window.location.hash.substring(1);
+                while (e = r.exec(q)) {
+                    hashParams[e[1]] = decodeURIComponent(e[2]);
+                }
+                return hashParams;
+            }
+
+            // Setup visual parts of page.
+            var userProfileSource = document.getElementById('user-profile-template').innerHTML,
+                userProfileTemplate = Handlebars.compile(userProfileSource),
+                userProfilePlaceholder = document.getElementById('user-profile');
+
+            var trackSource = document.getElementById('tracks-template').innerHTML,
+                trackTemplate = Handlebars.compile(trackSource),
+                tracksPlaceholder = document.getElementById('tracks');
+
+            var oauthSource = document.getElementById('oauth-template').innerHTML,
+                oauthTemplate = Handlebars.compile(oauthSource),
+                oauthPlaceholder = document.getElementById('oauth');
+
+            var currentTrackSource = document.getElementById('current-track-template').innerHTML,
+                currentTrackTemplate = Handlebars.compile(currentTrackSource),
+                currenTrackPlaceHolder = document.getElementById('current-track');
+
+            function setCurrentTrack(track) {
+                const image = track.album.images.length > 0 ? track.album.images[0] : {};
+                currenTrackPlaceHolder.innerHTML = currentTrackTemplate(
+                    {
+                        track: track,
+                        image: {
+                            url: image.url,
+                            height: image.height,
+                            width: image.width
+                        }
+                    }
+                )
+            }
+
+            var params = getHashParams();
+
+            var access_token = params.access_token,
+                refresh_token = params.refresh_token,
+                error = params.error;
+
+            function fetchPlaylistAndInfo() {
+                $.ajax({
+                    url: 'https://api.spotify.com/v1/me',
+                    headers: {
+                        'Authorization': 'Bearer ' + access_token
+                    },
+                    success: function (response) {
+                        console.dir(response);
+                        userProfilePlaceholder.innerHTML = userProfileTemplate(response);
+
+                        const userId = response.id;
+
+                        const userKey = `makey-spotify: ${userId}`;
+
+                        const existingPlaylist = myLocalStorage.getItem(userKey);
+
+                        userConst.setAccessToken(access_token);
+
+                        if (existingPlaylist) {
+                            // Get the playlist
+                            userConst.getPlaylistTracks(existingPlaylist, {}, (_, obj) => {
+                                playlistTracks = [];
+                                obj.items.forEach((track, index) => {
+
+                                    let key;
+
+                                    if (index + 1 > supportedKeys.length) {
+                                        key = 'Not Supported';
+                                    } else {
+                                        key = supportedKeys[index];
+                                    }
+
+                                    const image = track.track.album.images.length > 0 ? track.track.album.images[0] : {};
+
+                                    playlistTracks.push({
+                                        track: track.track,
+                                        key: key,
+                                        hasKey: key !== 'Not Supported',
+                                        image: {
+                                            url: image.url,
+                                            height: image.height,
+                                            width: image.width,
+                                        }
+                                    });
+                                });
+
+                                tracksPlaceholder.innerHTML = trackTemplate({
+                                    tracks: playlistTracks,
+                                });
+                                window.tracks = playlistTracks;
+                            });
+                        } else {
+                            userConst.createPlaylist(userId, {
+                                name: "Makey Spotify",
+                                description: "Used with the Makey Spotify app for song selection"
+                            }, (_, obj) => {
+                                console.dir(obj);
+                                myLocalStorage.setItem(userKey, obj.id);
+                            });
+                        }
+                        LoadPlayer(access_token);
+
+                        $('#login').hide();
+                        $('#loggedin').show();
+                    }
+                });
+            }
+
+            if (error) {
+                alert('There was an error during the authentication');
+            } else {
+                if (access_token) {
+                    // render oauth info
+                    oauthPlaceholder.innerHTML = oauthTemplate({
+                        access_token: access_token,
+                        refresh_token: refresh_token
+                    });
+                    console.log("sending the oauth template.")
+                    $('#login').hide();
+                    $('#loggedin').show();
+
+                    fetchPlaylistAndInfo();
+                } else {
+                    // render initial screen
+                    $('#login').show();
+                    $('#loggedin').hide();
+                }
+
+                document.getElementById('obtain-new-token').addEventListener('click', function () {
+                    $.ajax({
+                        url: '/refresh_token',
+                        data: {
+                            'refresh_token': refresh_token
+                        }
+                    }).done(function (data) {
+                        access_token = data.access_token;
+                        oauthPlaceholder.innerHTML = oauthTemplate({
+                            access_token: access_token,
+                            refresh_token: refresh_token
+                        });
+                        fetchPlaylistAndInfo();
+                    });
+                }, false);
+            }
+
+            function refreshToken() {
+                $.ajax({
+                    url: '/refresh_token',
+                    data: {
+                        'refresh_token': refresh_token
+                    }
+                }).done(function (data) {
+                    access_token = data.access_token;
+                    oauthPlaceholder.innerHTML = oauthTemplate({
+                        access_token: access_token,
+                        refresh_token: refresh_token
+                    });
+                    LoadPlayer(access_token);
+                });
+            }
+
+            let didRepeat = false;
+            function setRepeat() {
+                if (didRepeat) {
+                    return;
+                }
+                didRepeat = true;
+                $.ajax({
+                    url: `https://api.spotify.com/v1/me/player/repeat?state=context`,
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': 'Bearer ' + access_token
+                    },
+                });
+            }
+
+            function instantiatePlayer(token, play) {
+                const internal_player = new Spotify.Player({
+                    name: 'Makey Spotify Player',
+                    getOAuthToken: cb => { cb(token); },
+                    volume: 1,
+                });
+
+                // Error handling
+                // internal_player.addListener('initialization_error', ({ message }) => { console.error(message); });
+                internal_player.addListener('authentication_error', ({ message }) => {
+                    console.error(message);
+                    refreshToken();
+                });
+                // internal_player.addListener('account_error', ({ message }) => { console.error(message); });
+                // internal_player.addListener('playback_error', ({ message }) => { console.error(message); });
+
+                // Playback status updates
+                internal_player.addListener('player_state_changed', state => { 
+                    console.log("stae change");
+                    console.log(state); 
+
+                    setCurrentTrack(state.track_window.current_track);
+                });
+
+                // Ready
+                internal_player.addListener('ready', ({ device_id }) => {
+                    console.log('Ready with Device ID', device_id);
+                    internal_player.is_ready = true;
+
+                    play({
+                        playerInstance: internal_player,
+                        spotify_uris: playlistTracks.map(track => track.track.uri)
+                    }),
+
+                    playlistTracks.forEach((track) => {
+                        if (track.hasKey) {
+                            listener.simple_combo(track.key, () => {
+                                console.info(`Logged a key press ${track.key} -- for ${track.track}`);
+                            });
+                        }
+                    });
+                });
+
+                // Not Ready
+                internal_player.addListener('not_ready', ({ device_id }) => {
+                    console.log('Device ID has gone offline', device_id);
+                    internal_player.is_ready = false;
+                });
+
+                // Connect to the player!
+                internal_player.connect();
+                return internal_player;
+            }
+
+            let player;
+            function LoadPlayer(token) {
+                if (!token) {
+                    return;
+                }
+
+                userConst.setAccessToken(token);
+
+                const play = ({
+                    spotify_uris,
+                    playerInstance: {
+                        _options: {
+                            getOAuthToken,
+                            id
+                        }
+                    }
+                }) => {
+                    getOAuthToken(a_toke => {
+                        fetch(`https://api.spotify.com/v1/me/player/play?device_id=${id}`, {
+                            method: 'PUT',
+                            body: JSON.stringify({ uris: spotify_uris }),
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': `Bearer ${a_toke}`
+                            },
+                        });
+                    });
+                };
+
+                if (!player) {
+                    player = instantiatePlayer(access_token, play);
+                    setupButtons(player);
+                } else {
+                    player.connect();
+                }
+            }
+
+            function setupButtons(player) {
+                listener.simple_combo('space', () => {
+                    if (player.is_ready) {
+                        player.togglePlay();
+                    }
+                });
+
+                listener.simple_combo('n', () => {
+                    if (player.is_ready) {
+                        setRepeat();
+                        player.nextTrack();
+                    }
+                });
+
+                listener.simple_combo('p', () => {
+                    if (player.is_ready) {
+                        setRepeat();
+                        player.previousTrack();
+                    }
+                });
+            }
+
+            // Do the spotify setup here:
+            window.onSpotifyWebPlaybackSDKReady = LoadPlayer;
+        })();
+    </script>
+</body>
+
+</html>

@@ -326,13 +326,13 @@
                 });
 
                 // Error handling
-                // internal_player.addListener('initialization_error', ({ message }) => { console.error(message); });
+                internal_player.addListener('initialization_error', ({ message }) => { console.error(message); });
                 internal_player.addListener('authentication_error', ({ message }) => {
                     console.error(message);
                     refreshToken();
                 });
-                // internal_player.addListener('account_error', ({ message }) => { console.error(message); });
-                // internal_player.addListener('playback_error', ({ message }) => { console.error(message); });
+                internal_player.addListener('account_error', ({ message }) => { console.error(message); });
+                internal_player.addListener('playback_error', ({ message }) => { console.error(message); });
 
                 // Playback status updates
                 internal_player.addListener('player_state_changed', state => { 

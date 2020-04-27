@@ -123,10 +123,10 @@
              * Songs for playing
             */
             const supportedKeys = [
-                'left',
-                'right',
-                'up',
-                'down',
+                'a',
+                's',
+                'd',
+                'f',
             ]
             let playlistTracks = [];
             var userConst = new SpotifyWebApi();
@@ -425,7 +425,23 @@
                     }
                 });
 
+                listener.simple_combo('right', () => {
+                    console.info("Hit next")
+                    if (player.is_ready) {
+                        setRepeat();
+                        player.nextTrack();
+                    }
+                });
+
                 listener.simple_combo('p', () => {
+                    console.info("Hit previous")
+                    if (player.is_ready) {
+                        setRepeat();
+                        player.previousTrack();
+                    }
+                });
+
+                listener.simple_combo('left', () => {
                     console.info("Hit previous")
                     if (player.is_ready) {
                         setRepeat();

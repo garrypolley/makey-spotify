@@ -113,6 +113,13 @@
     <script>
         (function () {
             var listener = new window.keypress.Listener();
+            listener.simple_combo('down', () => {
+                window.location.refresh();
+            });
+
+            listener.simple_combo('up', () => {
+                document.getElementById('obtain-new-token').click();
+            });
             /**
              * 
              * Setup playlist
